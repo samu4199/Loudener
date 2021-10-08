@@ -9,7 +9,14 @@
 // YOUR CLAIM TO SUE IT'S AUTHOR,  AS WELL AS THE CLAIM TO ENTRUST SOMEBODY ELSE
 // WITH DOING SO.
 
-// Thanks to: Edoardo "TheEdoRan" Ranghieri & "tviler"
+// Thanks to: 
+   - Edoardo "TheEdoRan" Ranghieri
+   - "tviler" (from GearSpace)
+   - "BethHarmon" (from Cockos Forums)
+   - "RCJacH" (from Cockos Forums)
+   - "sai'ke" (from Cockos Forums)
+   - "Zeno" (from Cockos Forums)
+   
 // 2021, Samuele Pizzi
 
 desc:Loudener
@@ -39,32 +46,43 @@ filename:3,loudener_gfx/button_on.png
 
 @init
 //db to gain conversion
-last_gain = 10^(slider1 / 20);
-olast_gain = 10^(slider5 / 20);
+last_gain = exp(0.11512925464970229 * slider1);
+olast_gain = exp(0.11512925464970229 * slider5);
 
-//waveshaping function, 0 dB clip
-function waveShape(input) (
-  a*abs(input)+b*(input^2)+c*abs(input^3)-d*(input^2-2*abs(input^3)+input^4);
-);
-
-//waveshaping function, +6 dB clip
-function waveShapeOvershoot(input) (
-  input = min(max(input, -2),2);
-  2*abs(input) - input^2;
+//waveshaping function
+function waveShape(spln) (
+  in = abs(spln * last_gain);
+  clip ? (
+    //clip is on, limit input to 1.0
+    in = in > 1.0 ? 1.0 : in;
+  );
+  in_2 = in * in;
+  in_3 = in_2 * in;
+  out = (in >= 2.0) ? (
+    0.0
+  ) : (in > 1.0) ? (
+    2.0 * in - in_2
+  ) : (
+    a * in + b * in_2 + c * in_3 - d * (in_2 - 2.0 * in_3 + in_2 * in_2)
+  );
+  out = sign(spln) * out * wet_gain + min(max(spln * dry_gain, -2 * dry_gain), 2 * dry_gain);
+  out = clip ? max(-1, min(out, 1)) : out;
+  out * olast_gain
 );
 
 function process_sliders() (
   clip = slider3;
   //slider db to gain conversion on slider change
-  next_gain = 10^(slider1 / 20);
-  onext_gain = 10^(slider5 / 20);
-  //waveshape coefficient computation on slider change
-  a = 1 + (slider4 + 50)/100;
-  b = -slider4/50;
-  c = (slider4-50)/100;
-  d = 1/16 - slider4/400 + (slider4^2)/(4*10^4);
+  next_gain = exp(0.11512925464970229 * slider1);
+  onext_gain = exp(0.11512925464970229 * slider5);
+  //evaluate waveshape coefficient on slider change
+  curvepct = slider4 * 0.01;
+  a = 1.5 + curvepct;
+  b = -(curvepct + curvepct);
+  c = curvepct - 0.5;
+  d = 0.0625 - curve * 0.0025 + (curve * curve) * 0.000025;
   //wet-dry gain on effect slider change
-  wet_gain = slider2/100;
+  wet_gain = slider2 * 0.01;
   dry_gain = 1 - wet_gain;
 );
 
@@ -87,29 +105,8 @@ d_gain = (next_gain - last_gain)/samplesblock;
 od_gain = (onext_gain - olast_gain)/samplesblock;
 
 @sample
-//input gain
-i_l = spl0 * last_gain; 
-i_r = spl1 * last_gain;
-clip == 0 ? (
-  //clip is off, apply waveShapeOvershoot to overshoots
-  i_l > 1 || i_l < -1 ? (
-    output_left = waveShapeOvershoot(i_l);
-  ) : (
-    output_left = waveShape(i_l);
-  );
-  i_r > 1 || i_r < -1 ? (
-    output_right = waveShapeOvershoot(i_r);
-  ) : (
-    output_right = waveShape(i_r);
-  );
-) : (
-  //clip is on, limit input to -1,1 then apply waveshaping function
-  output_left = waveShape(min(max(i_l, -1),1));
-  output_right = waveShape(min(max(i_r, -1),1));
-);
-//sample polarity + wet-dry gain + output gain
-spl0 = (output_left * sign(spl0) * wet_gain + i_l * dry_gain) * olast_gain;
-spl1 = (output_right * sign(spl1) * wet_gain + i_r * dry_gain) * olast_gain;
+spl0 = waveShape(spl0);
+spl1 = waveShape(spl1);
 //gain difference
 last_gain += d_gain;
 olast_gain += od_gain;
