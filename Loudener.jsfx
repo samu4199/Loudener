@@ -32,8 +32,6 @@ slider4:0<-50,50,0.1>-Curve
 //output_db
 slider5:0<-12,0,0.1>-Output (dB)
 
-//slider:multiband=0<0,1,1{OFF,ON}>Band Split
-
 in_pin:Left Input
 in_pin:Right Input
 out_pin:Left Output
